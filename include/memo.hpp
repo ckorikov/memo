@@ -4,6 +4,7 @@
 #include <functional>
 #include <map>
 #include <type_traits>
+#include<fstream>
 
 namespace memo {
 
@@ -132,6 +133,60 @@ namespace memo {
   #endif
       >...>(std::forward<CallArgs>(args)...);
     }
+
+    void save(const std::string& file_name)
+    {
+      std::ofstream os(file_name, std::ios::out | std::ios::binary);
+      if(!os)
+      {
+        return;
+      }
+
+      for(auto kv: memo_)
+      {
+        const tuple_type tuple = kv.first;
+        const return_type value = kv.second;
+        const char* data_p = reinterpret_cast<const char*>(&tuple);
+        os.write(data_p, sizeof(tuple));
+        os.write(reinterpret_cast<const char*>(&value), sizeof(value));
+      }
+
+      os.close();
+    }
+
+    void load(const std::string& file_name)
+    {
+      std::ifstream is(file_name, std::ios::in | std::ios::binary);
+      if(!is)
+      {
+        return;
+      }
+
+      const size_t n = ( sizeof(Args) + ... );
+
+      is.seekg (0, is.end);
+      size_t length = is.tellg();
+      is.seekg (0, is.beg);
+
+      while(length)
+      {
+        tuple_type tuple;
+        return_type value;
+        is.read(reinterpret_cast<char*>(&tuple), n);
+        length -= n;
+        is.read(reinterpret_cast<char*>(&value), sizeof (return_type));
+        length -= sizeof (return_type);
+        memo_[tuple] = value;
+      }
+
+      is.close();
+    }
+
+    auto& get_cache()
+    {
+      return memo_;
+    }
+
   private:
     template<typename ...CallArgs>
     return_reference call(CallArgs ...args) {
